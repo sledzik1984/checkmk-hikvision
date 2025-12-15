@@ -11,20 +11,24 @@ from cmk.agent_based.v2 import (
 )
 
 ###############################################################################
-# SYSTEM ONLY . MINIMAL TEST PLUGIN
+# HIKVISION . SYSTEM STATUS (SINGLE SERVICE)
 ###############################################################################
 
 def parse_hikvision_system(string_table):
     if not string_table:
-        return {}
+        return None
 
     row = string_table[0]
-    return {
-        "device_status": int(row[0]),
-        "online": int(row[1]),
-        "cpu_num": int(row[2]),
-        "mem_usage": int(row[3]),
-    }
+
+    try:
+        return {
+            "device_status": int(row[0]),
+            "online": int(row[1]),
+            "cpu_num": int(row[2]),
+            "mem_usage": int(row[3]),
+        }
+    except (IndexError, ValueError):
+        return None
 
 
 snmp_section_hikvision_system = SimpleSNMPSection(
@@ -44,19 +48,27 @@ snmp_section_hikvision_system = SimpleSNMPSection(
 
 
 def discover_hikvision_system(section):
-    yield Service()
+    if section is not None:
+        yield Service()
 
 
 def check_hikvision_system(section):
-    if not section:
+    if section is None:
+        yield Result(
+            state=State.UNKNOWN,
+            summary="No SNMP data received",
+        )
         return
 
     if section["online"] != 1:
-        yield Result(State.CRIT, "Device offline")
+        yield Result(
+            state=State.CRIT,
+            summary="Device offline",
+        )
         return
 
     yield Result(
-        State.OK,
+        state=State.OK,
         summary=(
             f"Online, CPUs: {section['cpu_num']}, "
             f"Memory usage: {section['mem_usage']}%"
@@ -64,7 +76,7 @@ def check_hikvision_system(section):
     )
 
     yield Result(
-        State.OK,
+        state=State.OK,
         notice=f"Device status code: {section['device_status']}",
     )
 
@@ -72,7 +84,7 @@ def check_hikvision_system(section):
 check_plugin_hikvision_system = CheckPlugin(
     name="hikvision_system_only",
     sections=["hikvision_system_only"],
-    service_name="Hikvision System (test)",
+    service_name="Hikvision NVR System",
     discovery_function=discover_hikvision_system,
     check_function=check_hikvision_system,
 )
